@@ -1,0 +1,6 @@
+
+#note: modify repository and revison accordingly.
+cryptoConfigMount:
+  gitRepo:
+    repository: "https://github.com/anzalbeg/opensource.com.git"
+    revision: "master"

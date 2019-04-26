@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    service: {{ .Release.Name }}-cli
+  name: {{ .Release.Name }}-cli
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      service: {{ .Release.Name }}-cli
+  template:
+    metadata:
+      name: {{ .Release.Name }}-cli
+      labels:
+        service: {{ .Release.Name }}-cli
+      namespace: default
+    spec:
+      hostAliases:
+      - ip: "{{ .Values.fabricOrderer.addr }}"
+      hostnames:
+      - "orderer.{{ .Values.fabricOrderer.orgDomain }}"
+      containers:
+      - command:
+        - peer
+        - node
+        - start
+        env:
+        - name: CORE_VM_ENDPOINT
+          value: unix:///var/run/docker.sock
+        - name: CORE_LOGGING_LEVEL
+          value: DEBUG
+        - name: CORE_PEER_ADDRESS
+          value: 0.0.0.0:7051
+        - name: CORE_PEER_ID
+          value: cli
+        # - name: CORE_PEER_CHAINCODELISTENADDRESS 
+        #   value: {{ .Values.ingress.addr }}:7051
+        - name: CORE_PEER_MSPCONFIGPATH
+          value: /opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/crypto-config/opensource.com/HLF/crypto-config/peerOrganizations/{{ .Values.fabricOrg1.domain }}/users/Admin@{{ .Values.fabricOrg1.domain }}/msp
+        - name: CORE_PEER_LOCALMSPID
+          value: {{ .Values.fabricOrg1.msp }}
+        image: {{ .Values.fabricCli.image }}:{{ .Values.fabricCli.tag }}
+        name: {{ .Release.Name }}-cli
+        workingDir: /opt/gopath/src/github.com/hyperledger/fabric/peer
+        ports:
+        - containerPort: 7051
+        - containerPort: 7053
+        - containerPort: 7050
+        - containerPort: 7052
+        volumeMounts:
+        - mountPath: /var/run/docker.sock
+          name: {{ .Release.Name }}-docker-sock
+        - mountPath: /opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/crypto-config
+          name: {{ .Release.Name }}-crypto-config
+          readOnly: true
+        - mountPath: /var/hyperledger/production
+          name: {{ .Release.Name }}-fabric
+      volumes:
+      - name: {{ .Release.Name }}-docker-sock
+        hostPath:
+          path: /var/run/docker.sock
+      - name: {{ .Release.Name }}-fabric
+      - name: {{ .Release.Name }}-crypto-config
+{{ toYaml .Values.cryptoConfigMount | indent 8 }}

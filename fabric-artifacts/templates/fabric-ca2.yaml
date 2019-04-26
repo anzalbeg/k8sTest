@@ -1,0 +1,85 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    service: {{ .Release.Name }}-ca2
+  name: {{ .Release.Name }}-ca2-org2
+  namespace: default
+spec:
+  externalTrafficPolicy: Cluster
+  clusterIP: {{.Values.clusterIpRange}}.0.3
+  ports:
+  - nodePort: 31877
+    port: 7054
+    protocol: TCP
+    targetPort: 7054
+  selector:
+    service: {{ .Release.Name }}-ca2
+  type: NodePort
+status:
+  loadBalancer: {}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    service: {{ .Release.Name }}-ca2
+  name: {{ .Release.Name }}-ca2
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      service: {{ .Release.Name }}-ca2
+  template:
+    metadata:
+      name: {{ .Release.Name }}-ca2
+      labels:
+        service: {{ .Release.Name }}-ca2
+      namespace: default
+    spec:
+      hostAliases:
+      - ip: "{{ .Values.fabricOrderer.addr }}"
+      hostnames:
+       - "orderer.{{ .Values.fabricOrderer.orgDomain }}"
+      containers:
+      - command:
+        - fabric-ca-server
+        - start
+        - --ca.certfile
+        - /etc/crypto-config/opensource.com/HLF/crypto-config/peerOrganizations/{{ .Values.fabricOrg2.domain }}/ca/ca.{{ .Values.fabricOrg2.domain }}-cert.pem
+        - --ca.keyfile
+        - /etc/crypto-config/opensource.com/HLF/crypto-config/peerOrganizations/{{ .Values.fabricOrg2.domain }}/ca/{{ .Values.fabricCa2.keyStoreHash }}_sk
+        - -b
+        - admin:adminpw
+        - -d
+        env:
+        - name: FABRIC_CA_HOME
+          value: /etc/hyperledger/fabric-ca-server
+        - name: FABRIC_CA_SERVER_CA_NAME
+          value: ca2.{{ .Values.fabricOrg2.domain }}
+        - name: CORE_LOGGING_LEVEL
+          value: DEBUG
+        - name: CA2_POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: CA2_POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: CA2_POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        image: {{ .Values.fabricCa2.image }}:{{ .Values.fabricCa2.tag }}
+        name: {{ .Release.Name }}-ca2
+        ports:
+        - containerPort: 7054
+        volumeMounts:
+        - mountPath: /etc/crypto-config
+          name: {{ .Release.Name }}-crypto-config
+          readOnly: true
+      volumes:
+      - name: {{ .Release.Name }}-crypto-config
+{{ toYaml .Values.cryptoConfigMount | indent 8 }}

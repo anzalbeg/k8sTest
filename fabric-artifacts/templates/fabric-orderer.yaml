@@ -1,0 +1,86 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    service: {{ .Release.Name }}-orderer
+  name: {{ .Release.Name }}-orderer-g746q
+  namespace: default
+spec:
+  externalTrafficPolicy: Cluster
+  clusterIP: {{.Values.clusterIpRange}}.0.4
+  ports:
+  - nodePort: 31362
+    port: 7050
+    protocol: TCP
+    targetPort: 7050
+  selector:
+    service: {{ .Release.Name }}-orderer
+  type: NodePort
+status:
+  loadBalancer: {}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  labels:
+    service: {{ .Release.Name }}-orderer
+  name: {{ .Release.Name }}-orderer
+  namespace: default
+spec:
+  replicas: {{ .Values.fabricOrderer.replicas }}
+  selector:
+    matchLabels:
+      service: {{ .Release.Name }}-orderer
+  template:
+    metadata:
+      name: {{ .Release.Name }}-orderer
+      labels:
+        service: {{ .Release.Name }}-orderer
+      namespace: default
+    spec:
+      hostAliases:
+      - ip: "{{ .Values.fabricOrderer.addr }}"
+      hostnames:
+      - "orderer.{{ .Values.fabricOrderer.orgDomain }}"
+      containers:
+      - command:
+        - orderer
+        env:
+        - name: GODEBUG
+          value: netdns=go+1
+        - name: ORDERER_GENERAL_LOGLEVEL
+          value: debug
+        - name: ORDERER_GENERAL_LISTENADDRESS
+          value: 0.0.0.0
+        - name: ORDERER_GENERAL_GENESISMETHOD
+          value: file
+        - name: ORDERER_GENERAL_GENESISFILE
+          value:  /etc/crypto-config/opensource.com/HLF/channel-artifacts/orderer-genesis.block
+        - name: ORDERER_GENERAL_LOCALMSPID
+          value: {{ .Values.fabricOrderer.msp }}
+        - name: ORDERER_GENERAL_LOCALMSPDIR
+          value: /etc/crypto-config/opensource.com/HLF/crypto-config/ordererOrganizations/{{ .Values.fabricOrderer.orgDomain }}/orderers/orderer.{{ .Values.fabricOrderer.orgDomain }}/msp
+        {{  if eq .Values.fabricOrderer.consensusType "kafka" }}
+        - name: ORDERER_KAFKA_VERBOSE
+          value: "true"
+        {{- end }}
+        image: {{ .Values.fabricOrderer.image }}:{{ .Values.fabricOrderer.tag }}
+        name: {{ .Release.Name }}-orderer
+        workingDir: /opt/gopath/src/github.com/hyperledger/fabric
+        ports:
+        - containerPort: 7050
+        volumeMounts:
+          - mountPath: /var/run/docker.sock
+            name: {{ .Release.Name }}-docker-sock
+          - mountPath: /etc/crypto-config
+            name: {{ .Release.Name }}-crypto-config
+            readOnly: true
+          - mountPath: /var/hyperledger/production
+            name: orderer-datadir
+      volumes:
+      - name: {{ .Release.Name }}-docker-sock
+        hostPath:
+          path: /var/run/docker.sock
+      - name: orderer-datadir
+      - name: {{ .Release.Name }}-crypto-config
+{{ toYaml .Values.cryptoConfigMount | indent 8 }}
